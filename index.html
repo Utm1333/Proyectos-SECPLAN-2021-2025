@@ -1,0 +1,1755 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width" />
+  <title>Mapa de Proyectos — Coquimbo urbano (final)</title>
+
+  <link rel="stylesheet" href="css/leaflet.css" />
+  <link rel="stylesheet" href="css/qgis2web.css" />
+  <link rel="stylesheet" href="css/fontawesome-all.min.css" />
+
+  <style>
+    html, body, #map { width:100%; height:100%; padding:0; margin:0; font-family: "Segoe UI", Roboto, Arial, sans-serif; box-sizing: border-box; }
+    *, *:before, *:after { box-sizing: inherit; }
+    #map { position:relative; }
+
+    /* Info box */
+    #texto {
+      position: fixed;
+      bottom: 12px;
+      left: 12px;
+      right: auto;
+      width: auto;
+      max-width: 480px;
+      padding: 12px 16px;
+      background:#fff;
+      border:1px solid #dcdcdc;
+      border-radius:10px;
+      box-shadow:0 6px 18px rgba(0,0,0,0.12);
+      text-align:center;
+      font-size:15px;
+      z-index:1400;
+    }
+
+    @media (max-width: 600px) {
+      #texto {
+        left: 12px;
+        right: 12px;
+        width: calc(100% - 24px);
+        max-width: none;
+      }
+    }
+
+    @media(min-width: 601px) and (max-width: 1024px) {
+      #texto { left: 12px; right: auto; width: auto; max-width: 420px; }
+    }
+
+    .hidden { opacity:0; transform: translateY(12px); pointer-events:none; }
+
+    #logo { display:block; width:63px; height:auto; margin:0 auto 8px; }
+    .logo-container { text-align:center; margin-bottom:6px; }
+    #cerrarTexto { position:absolute; top:8px; right:8px; background:transparent; border:0; font-size:18px; cursor:pointer; color:#666; padding:4px; border-radius:6px; }
+    #cerrarTexto:hover { background: rgba(0,0,0,0.04); color:#222; }
+
+    /* Panel de estado de actualización - CENTRADO INFERIOR */
+    #updateStatus {
+      position: fixed;
+      bottom: 80px; /* Separado del borde inferior para no interferir con otros controles */
+      left: 50%;
+      transform: translateX(-50%);
+      background: #fff;
+      padding: 10px 16px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 1500;
+      display: none;
+      align-items: center;
+      font-size: 14px;
+      border: 1px solid #e0e0e0;
+      max-width: 90%;
+      min-width: 280px;
+      text-align: center;
+    }
+    
+    @media (max-width: 600px) {
+      #updateStatus {
+        bottom: 70px;
+        max-width: 85%;
+        min-width: 250px;
+        padding: 8px 12px;
+      }
+    }
+    
+    @media (max-width: 400px) {
+      #updateStatus {
+        bottom: 65px;
+        max-width: 90%;
+        min-width: 220px;
+        padding: 6px 10px;
+        font-size: 13px;
+      }
+    }
+    
+    #statusText {
+      flex-grow: 1;
+      margin-right: 10px;
+    }
+    
+    @media (max-width: 400px) {
+      #statusText {
+        margin-right: 8px;
+      }
+    }
+    
+    #refreshBtn {
+      background: #0c4c87;
+      color: white;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      min-width: 90px;
+    }
+    
+    #refreshBtn:hover {
+      background: #1a6bb0;
+      transform: translateY(-1px);
+      box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+    }
+    
+    #refreshBtn:active {
+      transform: translateY(0);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    #refreshBtn:disabled {
+      background: #cccccc;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    
+    #lastUpdateTime {
+      font-size: 11px;
+      color: #666;
+      margin-top: 6px;
+      font-style: italic;
+      width: 100%;
+      text-align: center;
+    }
+    
+    @media (max-width: 400px) {
+      #lastUpdateTime {
+        font-size: 10px;
+        margin-top: 4px;
+      }
+    }
+
+    /* Chart panel */
+    #chartPanel { 
+      position: fixed; 
+      right: 12px; 
+      bottom: 12px; 
+      width:100%; 
+      max-width:360px; 
+      z-index:1350; 
+      background:#fff; 
+      border-radius:10px; 
+      padding:12px; 
+      box-shadow:0 8px 20px rgba(0,0,0,0.12); 
+    }
+    
+    @media(min-width:768px){ 
+      #chartPanel { 
+        max-width:340px; 
+        right:16px; 
+        bottom:16px; 
+      } 
+    }
+    
+    @media(max-width:600px){ 
+      #chartPanel { 
+        max-width:320px; 
+        right:8px; 
+        bottom:8px; 
+      } 
+    }
+
+    /* Ajuste para móviles: chart panel más arriba si hay panel de estado */
+    @media (max-width: 768px) {
+      #updateStatus:not([style*="display: none"]) ~ #chartPanel {
+        bottom: 100px;
+      }
+    }
+
+    #barChartContainer { position:relative; min-height:140px; overflow:auto; }
+    @media (max-width:600px) {
+      #barChartContainer { max-height:60vh; }
+    }
+
+    /* Legend control */
+    .leaflet-control-legend-tree { 
+      background:#fff; 
+      padding:8px; 
+      border-radius:10px; 
+      box-shadow:0 6px 20px rgba(0,0,0,0.14); 
+      font-size:13px; 
+      line-height:1.25; 
+      max-height:60vh; 
+      overflow:auto; 
+      width:300px; 
+      z-index:1400; 
+    }
+    
+    .lt-item { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+    .lt-checkbox { width:20px; height:20px; }
+    .lt-icon-img { width:20px; height:20px; object-fit:contain; display:block; }
+    .lt-children { padding-left:18px; margin-top:4px; margin-bottom:6px; }
+    .lt-group-toggle { background:none; border:0; color:#4a4a4a; font-size:13px; cursor:pointer; padding:0 6px; }
+
+    /* NUEVO ESTILO PARA POPUP MEJORADO - RESPONSIVE */
+    .leaflet-popup-content-wrapper {
+      background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+      border-radius: 16px;
+      box-shadow: 0 12px 40px rgba(0, 76, 135, 0.18);
+      border: 1px solid rgba(12, 76, 135, 0.12);
+      padding: 0;
+      overflow: hidden;
+      backdrop-filter: blur(4px);
+      max-width: 95vw;
+    }
+    
+    .leaflet-popup-content {
+      margin: 0;
+      color: #213244;
+      font-size: 14px;
+      line-height: 1.5;
+      width: auto !important;
+      min-width: 280px;
+      max-width: 380px;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+    
+    @media (max-width: 480px) {
+      .leaflet-popup-content {
+        min-width: 260px;
+        max-width: 90vw;
+      }
+    }
+    
+    @media (max-width: 360px) {
+      .leaflet-popup-content {
+        min-width: 240px;
+        max-width: 85vw;
+      }
+    }
+    
+    .leaflet-popup-tip-container .leaflet-popup-tip {
+      background: #fff;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .leaflet-popup-close-button {
+      color: #3b4b54;
+      font-size: 18px;
+      opacity: 0.8;
+      right: 10px;
+      top: 8px;
+      background: rgba(255,255,255,0.9);
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      z-index: 1000;
+    }
+    
+    .leaflet-popup-close-button:hover {
+      background: #f0f7ff;
+      color: #0c4c87;
+      opacity: 1;
+    }
+
+    .popup-header {
+      background: linear-gradient(135deg, #0c4c87 0%, #1a6bb0 100%);
+      color: white;
+      padding: 16px 16px 14px;
+      position: relative;
+      margin-bottom: 0;
+    }
+    
+    @media (max-width: 480px) {
+      .popup-header {
+        padding: 14px 14px 12px;
+      }
+    }
+    
+    .popup-header::after {
+      content: '';
+      position: absolute;
+      bottom: -10px;
+      left: 20px;
+      width: 40px;
+      height: 3px;
+      background: #4da6ff;
+      border-radius: 2px;
+    }
+    
+    @media (max-width: 480px) {
+      .popup-header::after {
+        left: 16px;
+        width: 35px;
+      }
+    }
+    
+    .popup-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 6px 0;
+      line-height: 1.3;
+      color: white;
+      display: block;
+      word-wrap: break-word;
+    }
+    
+    @media (max-width: 480px) {
+      .popup-title {
+        font-size: 16px;
+        margin-bottom: 4px;
+      }
+    }
+    
+    @media (max-width: 360px) {
+      .popup-title {
+        font-size: 15px;
+      }
+    }
+    
+    .popup-subtitle {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      opacity: 0.9;
+      margin-top: 8px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    
+    @media (max-width: 480px) {
+      .popup-subtitle {
+        font-size: 12px;
+        margin-top: 6px;
+      }
+    }
+    
+    .popup-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,0.15);
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      max-width: 70%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    @media (max-width: 480px) {
+      .popup-badge {
+        font-size: 11px;
+        padding: 3px 8px;
+        max-width: 65%;
+      }
+    }
+    
+    .popup-year {
+      background: rgba(255,255,255,0.2);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    
+    @media (max-width: 480px) {
+      .popup-year {
+        font-size: 11px;
+        padding: 2px 6px;
+      }
+    }
+
+    .popup-content {
+      padding: 18px;
+      background: white;
+    }
+    
+    @media (max-width: 480px) {
+      .popup-content {
+        padding: 14px;
+      }
+    }
+    
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    
+    @media (max-width: 480px) {
+      .info-grid {
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+    }
+    
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    
+    @media (max-width: 480px) {
+      .info-item {
+        gap: 5px;
+      }
+    }
+    
+    .info-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #0c4c87;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    @media (max-width: 480px) {
+      .info-label {
+        font-size: 11px;
+        gap: 5px;
+      }
+    }
+    
+    .info-label i {
+      font-size: 14px;
+      opacity: 0.8;
+    }
+    
+    @media (max-width: 480px) {
+      .info-label i {
+        font-size: 13px;
+      }
+    }
+    
+    .info-value {
+      font-size: 15px;
+      color: #21333a;
+      line-height: 1.4;
+      padding: 8px 12px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border-left: 3px solid #0c4c87;
+      word-break: break-word;
+    }
+    
+    @media (max-width: 480px) {
+      .info-value {
+        font-size: 14px;
+        padding: 6px 10px;
+        border-left-width: 2px;
+      }
+    }
+    
+    .info-value.highlight {
+      background: linear-gradient(135deg, #f0f7ff 0%, #e6f0ff 100%);
+      border-left: 3px solid #4da6ff;
+    }
+    
+    @media (max-width: 480px) {
+      .info-value.highlight {
+        border-left-width: 2px;
+      }
+    }
+
+    .estado-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    
+    @media (max-width: 480px) {
+      .estado-badge {
+        font-size: 11px;
+        padding: 5px 10px;
+      }
+    }
+    
+    .estado-planificacion { background: #fff3cd; color: #856404; }
+    .estado-ejecucion { background: #d1ecf1; color: #0c5460; }
+    .estado-finalizado { background: #d4edda; color: #155724; }
+    .estado-suspendido { background: #f8d7da; color: #721c24; }
+
+    .popup-footer {
+      padding: 14px 16px;
+      background: #f8fafc;
+      border-top: 1px solid #eef2f7;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: #64748b;
+    }
+    
+    @media (max-width: 480px) {
+      .popup-footer {
+        padding: 12px 14px;
+        font-size: 11px;
+      }
+    }
+    
+    .popup-id {
+      font-weight: 600;
+      color: #0c4c87;
+    }
+    
+    .popup-action {
+      color: #0c4c87;
+      text-decoration: none;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: color 0.2s ease;
+      white-space: nowrap;
+    }
+    
+    .popup-action:hover {
+      color: #1a6bb0;
+      text-decoration: underline;
+    }
+    
+    @media (max-width: 480px) {
+      .popup-action {
+        font-size: 11px;
+      }
+    }
+
+    @media (max-width: 320px) {
+      .popup-header {
+        padding: 12px 12px 10px;
+      }
+      
+      .popup-title {
+        font-size: 14px;
+      }
+      
+      .popup-badge {
+        font-size: 10px;
+        max-width: 60%;
+      }
+      
+      .popup-year {
+        font-size: 10px;
+      }
+      
+      .popup-content {
+        padding: 12px;
+      }
+      
+      .info-value {
+        font-size: 13px;
+        padding: 5px 8px;
+      }
+      
+      .estado-badge {
+        font-size: 10px;
+        padding: 4px 8px;
+      }
+      
+      .popup-footer {
+        padding: 10px 12px;
+        font-size: 10px;
+      }
+    }
+
+    /* Tooltip for bar chart */
+    .bar-tooltip { 
+      position:absolute; 
+      pointer-events:none; 
+      background:rgba(12,76,135,0.95); 
+      color:#fff; 
+      padding:8px 10px; 
+      border-radius:6px; 
+      font-size:12px; 
+      box-shadow:0 6px 20px rgba(0,0,0,0.18); 
+      opacity:0; 
+      transition:opacity 120ms ease; 
+      z-index:9999; 
+    }
+
+    /* Animación para popup */
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .leaflet-popup-content-wrapper {
+      animation: slideIn 0.3s ease-out;
+    }
+
+    /* Clase para popup responsivo en Leaflet */
+    .responsive-popup .leaflet-popup-content-wrapper {
+      max-width: 95vw;
+    }
+    
+    .responsive-popup .leaflet-popup-content {
+      width: auto !important;
+      min-width: 240px;
+      max-width: 380px;
+    }
+
+    /* Estilo para el icono de "Todos los proyectos" en leyenda */
+    .all-projects-icon {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background-color: #2AF527;
+      border: 1px solid #fff;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+
+    /* Spinner para carga */
+    .spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+      margin-right: 6px;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Animación para panel de estado */
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translate(-50%, 20px);
+      }
+      to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+    }
+    
+    #updateStatus {
+      animation: slideUp 0.3s ease-out;
+    }
+
+  </style>
+</head>
+<body>
+  <div id="map" role="application" aria-label="Mapa de Proyectos">
+    <!-- Panel de estado de actualización - CENTRADO INFERIOR -->
+    <div id="updateStatus" aria-live="polite">
+      <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+        <span id="statusText"></span>
+        <button id="refreshBtn" title="Actualizar datos del mapa">↻ Actualizar</button>
+      </div>
+      <div id="lastUpdateTime"></div>
+    </div>
+
+    <div id="texto" aria-live="polite">
+      <button id="cerrarTexto" aria-label="Cerrar información">✕</button>
+      <div class="logo-container">
+        <a href="http://mapas.municoquimbo.cl/" target="_blank" rel="noopener">
+          <img id="logo" src="images/logo.png" alt="Logo Municipalidad">
+        </a>
+      </div>
+      <strong style="display:block;margin-bottom:6px;">Proyectos Municipales 2021-2025</strong>
+      <div style="font-size:13px;color:#444;">Explora proyectos por temática o por año. Usa la leyenda para activar capas.</div>
+      <div id="lastUpdateTime2" style="font-size:11px;color:#666;margin-top:8px;font-style:italic;"></div>
+    </div>
+
+    <div id="chartPanel" aria-hidden="false">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <h4 id="chartTitle" style="margin:0;font-size:15px;color:#203445;">Proyectos por temática</h4>
+        <button id="toggleChartBtn" class="panel-toggle" aria-pressed="false" title="Mostrar/ocultar gráfico">▾</button>
+      </div>
+      <div id="barChartContainer" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <!-- JS libs -->
+  <script src="js/qgis2web_expressions.js"></script>
+  <script src="js/leaflet.js"></script>
+  <script src="js/leaflet-svg-shape-markers.min.js"></script>
+  <script src="js/Autolinker.min.js"></script>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
+
+  <script>
+  /* ------------------ CONFIG & HELPERS ------------------ */
+
+  // URL del CSV público
+  const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTI3pQPM0o8qMXSAY__qxYhvNXO6MDywu_zgKpi-SGa8ELnCsLDHcgA8hgjqfIyMu7nCA3aV146Hvjh/pub?gid=1736222817&single=true&output=csv';
+
+  // UTM19S definition (proj4)
+  const EPSG_UTM19S = 'EPSG:32719';
+  if (!proj4.defs[EPSG_UTM19S]) proj4.defs(EPSG_UTM19S, "+proj=utm +zone=19 +south +datum=WGS84 +units=m +no_defs");
+
+  // Initial view: Coquimbo urbano bounds (fixed)
+  const COQUIMBO_URBANO_BOUNDS = [
+    [-30.01648877193584, -71.37590360245304], // SW
+    [-29.92378802736024, -71.21192227222333]  // NE
+  ];
+
+  // Map init
+  var map = L.map('map', { zoomControl: true, maxZoom: 28, minZoom: 1 });
+  map.fitBounds(COQUIMBO_URBANO_BOUNDS);
+
+  var autolinker = new Autolinker({ truncate: { length: 30, location: 'smart' } });
+  var bounds_group = new L.featureGroup([]);
+
+  // Variables globales para control de actualización
+  let reloadInterval = null;
+  let currentLayers = [];
+  let lastDataUpdate = null;
+  let isLoading = false;
+
+  // Base panes & layers
+  map.createPane('pane_OpenStreetMap_0'); map.getPane('pane_OpenStreetMap_0').style.zIndex = 400;
+  const layer_OpenStreetMap_0 = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { pane: 'pane_OpenStreetMap_0', minZoom:1, maxZoom:28 });
+
+  map.createPane('pane_GoogleSatelite_1'); map.getPane('pane_GoogleSatelite_1').style.zIndex = 401;
+  const layer_GoogleSatelite_1 = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+    pane: 'pane_GoogleSatelite_1',
+    subdomains: ['mt0','mt1','mt2','mt3'],
+    attribution: 'Google Satellite',
+    maxZoom: 20
+  });
+
+  // add default base
+  layer_OpenStreetMap_0.addTo(map);
+
+  /* ------------------ FUNCIONES DE ACTUALIZACIÓN ------------------ */
+
+  // Función para mostrar estado
+  function showStatus(message, type = 'info', duration = 3000) {
+    const statusEl = document.getElementById('updateStatus');
+    const textEl = document.getElementById('statusText');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const lastUpdateEl = document.getElementById('lastUpdateTime');
+    
+    if (statusEl && textEl && refreshBtn && lastUpdateEl) {
+      // Actualizar texto
+      if (type === 'loading') {
+        textEl.innerHTML = `<span class="spinner"></span>${message}`;
+      } else {
+        textEl.textContent = message;
+      }
+      
+      // Actualizar estilos según tipo
+      statusEl.style.display = 'block';
+      
+      switch(type) {
+        case 'loading':
+          statusEl.style.background = '#e3f2fd';
+          statusEl.style.borderColor = '#bbdefb';
+          refreshBtn.disabled = true;
+          break;
+        case 'success':
+          statusEl.style.background = '#e8f5e9';
+          statusEl.style.borderColor = '#c8e6c9';
+          refreshBtn.disabled = false;
+          break;
+        case 'error':
+          statusEl.style.background = '#ffebee';
+          statusEl.style.borderColor = '#ffcdd2';
+          refreshBtn.disabled = false;
+          break;
+        default:
+          statusEl.style.background = '#fff';
+          statusEl.style.borderColor = '#e0e0e0';
+          refreshBtn.disabled = false;
+      }
+      
+      // Actualizar tiempo de última actualización
+      if (type === 'success') {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('es-CL', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          second: '2-digit'
+        });
+        const dateStr = now.toLocaleDateString('es-CL');
+        
+        lastUpdateEl.innerHTML = 
+          `Última actualización: ${dateStr} ${timeStr}`;
+        
+        // También actualizar en el panel de texto
+        const lastUpdateText2 = document.getElementById('lastUpdateTime2');
+        if (lastUpdateText2) {
+          lastUpdateText2.textContent = `Última actualización: ${dateStr} ${timeStr}`;
+        }
+        
+        lastDataUpdate = now;
+      }
+      
+      // Ocultar después de un tiempo (excepto para errores y carga)
+      if (type !== 'error' && type !== 'loading' && duration > 0) {
+        setTimeout(() => {
+          if (statusEl.style.display !== 'none') {
+            statusEl.style.display = 'none';
+          }
+        }, duration);
+      }
+    }
+  }
+
+  // Iniciar recarga automática
+  function startAutoReload(minutes = 10) {
+    if (reloadInterval) {
+      clearInterval(reloadInterval);
+    }
+    
+    reloadInterval = setInterval(() => {
+      console.log(`[${new Date().toLocaleTimeString()}] Recargando datos automáticamente...`);
+      loadDataFromCSV();
+    }, minutes * 60 * 1000);
+    
+    console.log(`Recarga automática configurada cada ${minutes} minutos`);
+  }
+
+  // Detener recarga automática
+  function stopAutoReload() {
+    if (reloadInterval) {
+      clearInterval(reloadInterval);
+      reloadInterval = null;
+    }
+  }
+
+  // Limpiar capas anteriores
+  function clearOldLayers() {
+    currentLayers.forEach(layer => {
+      try { 
+        if (map.hasLayer(layer)) {
+          map.removeLayer(layer); 
+        }
+      } catch(e) {
+        console.warn('Error al remover capa:', e);
+      }
+    });
+    currentLayers = [];
+    
+    // También limpiar control de leyenda si existe
+    if (window._legendTreeControl) {
+      try { 
+        map.removeControl(window._legendTreeControl); 
+        window._legendTreeControl = null;
+      } catch(e) {
+        console.warn('Error al remover control de leyenda:', e);
+      }
+    }
+  }
+
+  /* ------------------ FUNCIONES DE AYUDA ------------------ */
+
+  function cleanNumberString(v) {
+    if (v === undefined || v === null) return '';
+    var s = String(v).trim();
+    if (s === '') return '';
+    s = s.replace(/\s/g,'');
+    if (s.indexOf('.') !== -1 && s.indexOf(',') !== -1) {
+      if (s.indexOf('.') < s.indexOf(',')) s = s.replace(/\./g,'').replace(/,/g,'.');
+      else s = s.replace(/,/g,'');
+    } else s = s.replace(/,/g,'.');
+    s = s.replace(/[^0-9\.\-]/g,'');
+    return s;
+  }
+
+  function normalizeKey(s) {
+    if (s === undefined || s === null) return '';
+    let t = String(s).trim();
+    if (t === '') return '';
+    t = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    t = t.replace(/\s+/g, ' ').toUpperCase();
+    return t;
+  }
+
+  function stripHtml(html) { var tmp = document.createElement('div'); tmp.innerHTML = html; return tmp.textContent || tmp.innerText || ''; }
+  function escapeHtml(str) { return String(str).replace(/[&<>"'`=\/]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','/':'&#x2F;','`':'&#x60;','=':'&#x3D;'}[s])); }
+
+  function getPopupSize() {
+    const width = window.innerWidth;
+    
+    if (width <= 360) {
+      return { minWidth: 240, maxWidth: 280, className: 'responsive-popup' };
+    } else if (width <= 480) {
+      return { minWidth: 260, maxWidth: 320, className: 'responsive-popup' };
+    } else if (width <= 768) {
+      return { minWidth: 280, maxWidth: 350, className: 'responsive-popup' };
+    } else {
+      return { minWidth: 300, maxWidth: 380, className: 'responsive-popup' };
+    }
+  }
+
+  function formatCurrency(value) {
+    if (!value) return 'No especificado';
+    const num = parseFloat(String(value).replace(/[^\d.-]/g, ''));
+    if (isNaN(num)) return value;
+    return new Intl.NumberFormat('es-CL', {
+      style: 'currency',
+      currency: 'CLP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(num);
+  }
+
+  function getEstadoClass(estado) {
+    const estadoLower = String(estado).toLowerCase();
+    if (estadoLower.includes('planif') || estadoLower.includes('diseño')) return 'estado-planificacion';
+    if (estadoLower.includes('ejec') || estadoLower.includes('en curso')) return 'estado-ejecucion';
+    if (estadoLower.includes('final') || estadoLower.includes('terminado')) return 'estado-finalizado';
+    if (estadoLower.includes('suspend') || estadoLower.includes('detenido')) return 'estado-suspendido';
+    return 'estado-planificacion';
+  }
+
+  function getTematicaIcon(tematica) {
+    const temas = {
+      'SEGURIDAD': '🔒',
+      'SALUD': '🏥',
+      'ESPACIOS PUBLICOS': '🌳',
+      'INFRAESTRUCTURA': '🏗️',
+      'ADULTO MAYOR': '👵',
+      'DESARROLLO': '📈',
+      'ENERGIA': '⚡',
+      'EQUIPAMIENTO': '🏛️'
+    };
+    
+    for (const [key, icon] of Object.entries(temas)) {
+      if (tematica.toUpperCase().includes(key)) return icon;
+    }
+    return '📍';
+  }
+
+  function truncateText(text, maxLength) {
+    const width = window.innerWidth;
+    let length = maxLength;
+    
+    if (width <= 320) length = Math.floor(maxLength * 0.7);
+    else if (width <= 480) length = Math.floor(maxLength * 0.8);
+    else if (width <= 768) length = Math.floor(maxLength * 0.9);
+    
+    if (text.length <= length) return text;
+    return text.substring(0, length) + '...';
+  }
+
+  function createAllProjectsSVG() {
+    return `<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="10" cy="10" r="8" fill="#2AF527" stroke="#fff" stroke-width="1.5"/>
+      <circle cx="10" cy="10" r="4" fill="#fff" fill-opacity="0.8"/>
+    </svg>`;
+  }
+
+  // symbology maps
+  const YEAR_STYLE_MAP = {
+    '2021': { color: '#4DA6FF', shape:'circle', radius:6, name:'2021' },
+    '2022': { color: '#FF9966', shape:'diamond', radius:7, name:'2022' },
+    '2023': { color: '#FFCC33', shape:'square', radius:6, name:'2023' },
+    '2024': { color: '#66CC66', shape:'triangle', radius:6, name:'2024' },
+    '2025': { color: '#FF4D4D', shape:'circle', radius:7, name:'2025' }
+  };
+
+  const TEMATICA_STYLE_MAP = {
+    'SEGURIDAD, EMERGENCIA Y SERVICIOS PUBLICOS': { iconUrl:'images/emergencia.png', name:'Seguridad, emergencia y servicios públicos' },
+    'SALUD Y BIENESTAR': { iconUrl:'images/salud.png', name:'Salud y bienestar' },
+    'ESPACIOS PUBLICOS Y AREAS VERDES': { iconUrl:'images/espacios publicos.png', name:'Espacios públicos y áreas verdes' },
+    'INFRAESTRUCTURA URBANA Y VIAL': { iconUrl:'images/infraestructura.png', name:'Infraestructura urbana y vial' },
+    'ADULTO MAYOR Y ACCESIBILIDAD': { iconUrl:'images/anciano.png', name:'Adulto mayor y accesibilidad' },
+    'DESARROLLO PRODUCTIVO Y TURISMO': { iconUrl:'images/desarrollo.png', name:'Desarrollo productivo y turismo' },
+    'ENERGIA Y ELECTRICIDAD': { iconUrl:'images/energia.png', name:'Energía y electricidad' },
+    'EQUIPAMIENTO COMUNITARIO Y EDIFICIOS PUBLICOS': { iconUrl:'images/equipamiento.png', name:'Equipamiento comunitario y edificios públicos' }
+  };
+
+  const TEMATICA_STYLE_MAP_NORM = (function(orig){
+    const out = {};
+    Object.keys(orig).forEach(k => {
+      const norm = normalizeKey(k);
+      out[norm] = { originalKey: k, style: orig[k], displayName: orig[k].name || k };
+    });
+    return out;
+  })(TEMATICA_STYLE_MAP);
+
+  function makeShapeSVG(shape, color) {
+    if (!color) color = '#888';
+    if (shape === 'circle') return `<svg width="18" height="18" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="6" fill="${color}" stroke="#232323" stroke-width="0.8"/></svg>`;
+    if (shape === 'square') return `<svg width="18" height="18" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="12" height="12" fill="${color}" stroke="#232323" stroke-width="0.8"/></svg>`;
+    if (shape === 'triangle') return `<svg width="18" height="18" xmlns="http://www.w3.org/2000/svg"><polygon points="9,3 16,15 2,15" fill="${color}" stroke="#232323" stroke-width="0.8"/></svg>`;
+    if (shape === 'diamond') return `<svg width="18" height="18" xmlns="http://www.w3.org/2000/svg"><polygon points="9,2 16,9 9,16 2,9" fill="${color}" stroke="#232323" stroke-width="0.8"/></svg>`;
+    return `<svg width="18" height="18" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="18" height="18" fill="${color}" stroke="#232323" stroke-width="0.8" rx="2"/></svg>`;
+  }
+
+  function createShapeMarker(latlng, opts) {
+    if (typeof L.shapeMarker === 'function') {
+      return L.shapeMarker(latlng, opts);
+    } else {
+      return L.circleMarker(latlng, {
+        radius: opts.radius || 6,
+        color: opts.color || (opts.fillColor || '#232323'),
+        weight: opts.weight || 1,
+        fillColor: opts.fillColor || opts.color || '#888',
+        fillOpacity: opts.fillOpacity !== undefined ? opts.fillOpacity : 1
+      });
+    }
+  }
+
+  function createLegendIconElement(iconUrl, fallbackHtml) {
+    const wrapper = document.createElement('span');
+    wrapper.className = 'legend-icon-wrapper';
+    if (!iconUrl) { wrapper.innerHTML = fallbackHtml; return wrapper; }
+    const img = document.createElement('img');
+    img.className = 'lt-icon-img'; img.src = iconUrl; img.alt = '';
+    img.onerror = function() {
+      try { img.style.display = 'none'; const span = document.createElement('span'); span.innerHTML = fallbackHtml; img.parentNode.appendChild(span); } catch (e) {}
+    };
+    wrapper.appendChild(img);
+    return wrapper;
+  }
+
+  function createThematicMarker(latlng, iconUrl, fallbackHtml) {
+    const html = iconUrl ? `<img src="${iconUrl}" class="lt-icon-img" alt="">` : fallbackHtml;
+    const icon = L.divIcon({ className: 'custom-div-icon', html: html, iconSize: [20,20], iconAnchor: [10,10] });
+    const marker = L.marker(latlng, { icon: icon });
+    marker.on('add', function() {
+      const el = marker.getElement();
+      if (!el) return;
+      const img = el.querySelector('img');
+      if (img) {
+        img.addEventListener('error', function() {
+          try { img.style.display = 'none'; const span = document.createElement('span'); span.innerHTML = fallbackHtml; img.parentNode.appendChild(span); } catch (e) {}
+        });
+      }
+    });
+    return marker;
+  }
+
+  /* ------------------ CSV LOAD & PROCESS ------------------ */
+  async function loadDataFromCSV() {
+    // Evitar múltiples cargas simultáneas
+    if (isLoading) {
+      console.log('Ya se está cargando, omitiendo...');
+      return;
+    }
+    
+    isLoading = true;
+    showStatus('Actualizando datos del mapa...', 'loading', 0);
+    
+    try {
+      // Agregar timestamp para evitar caché
+      const timestamp = Date.now();
+      const csvUrl = `${GOOGLE_SHEET_CSV_URL}&timestamp=${timestamp}`;
+      
+      console.log(`Cargando datos desde: ${csvUrl}`);
+      
+      const responseText = await d3.text(csvUrl);
+      const csvData = d3.csvParse(responseText);
+      
+      if (!csvData || csvData.length === 0) {
+        throw new Error("CSV vacío o URL incorrecta.");
+      }
+
+      const mappedData = csvData.map(d => {
+        const nr = {};
+        Object.keys(d).forEach(k => nr[String(k).trim().toUpperCase()] = d[k]);
+        return nr;
+      });
+
+      const NORTH_NAMES = ['NORTE','Y','N','LAT','LATITUD','NORTHING'];
+      const EAST_NAMES = ['ESTE','E','X','LON','LONG','LONGITUD','EASTING'];
+
+      const geojson = { type:'FeatureCollection', features: [] };
+      let discarded = 0;
+
+      mappedData.forEach((row, idx) => {
+        const nRaw = NORTH_NAMES.map(n => row[n]).find(v => v !== undefined && v !== null && String(v).trim() !== '');
+        const eRaw = EAST_NAMES.map(n => row[n]).find(v => v !== undefined && v !== null && String(v).trim() !== '');
+        if (!nRaw || !eRaw) { discarded++; return; }
+
+        const nClean = cleanNumberString(nRaw), eClean = cleanNumberString(eRaw);
+        if (nClean === '' || eClean === '') { discarded++; return; }
+
+        const nNum = parseFloat(nClean), eNum = parseFloat(eClean);
+        if (isNaN(nNum) || isNaN(eNum)) { discarded++; return; }
+
+        let lat, lon;
+        const looksGeo = Math.abs(nNum) <= 90 && Math.abs(eNum) <= 180;
+        if (looksGeo) { lat = nNum; lon = eNum; }
+        else {
+          try {
+            const res = proj4(EPSG_UTM19S, 'EPSG:4326', [eNum, nNum]);
+            lon = Number(res[0]); lat = Number(res[1]);
+          } catch (err) {
+            discarded++;
+            return;
+          }
+        }
+
+        if (!isFinite(lat) || !isFinite(lon) || isNaN(lat) || isNaN(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+          discarded++;
+          return;
+        }
+
+        const rawTem = row['TEMATICA'] || '';
+        const temKey = normalizeKey(rawTem);
+
+        geojson.features.push({
+          type:'Feature',
+          properties: {
+            INICIATIVA: row['INICIATIVA'] || '',
+            FINANCIAMI: row['FINANCIAMI'] || '',
+            MONTO: row['MONTO'] || '',
+            ESTADO: row['ESTADO'] ? String(row['ESTADO']).toUpperCase() : '',
+            TEMATICA: rawTem,
+            TEMATICA_KEY: temKey,
+            'AÑO': row['AÑO'] || row['ANO'] || '',
+            ID: row['ID'] || idx + 1
+          },
+          geometry: { type:'Point', coordinates: [lon, lat] }
+        });
+      });
+
+      console.log(`Datos procesados: ${geojson.features.length} proyectos, ${discarded} filas descartadas`);
+      
+      // Limpiar capas anteriores
+      clearOldLayers();
+      
+      // Procesar nuevos datos
+      processGeoJsonData(geojson);
+      
+      // Mostrar éxito
+      const projectCount = geojson.features.length;
+      showStatus(`${projectCount} proyectos cargados correctamente`, 'success', 5000);
+      
+    } catch (err) {
+      console.error('Error en loadDataFromCSV:', err);
+      showStatus(`Error: ${err.message || 'No se pudieron cargar los datos'}`, 'error', 10000);
+      
+      // Si es la primera carga, mostrar alerta
+      if (!lastDataUpdate) {
+        setTimeout(() => {
+          alert('Error cargando datos del mapa. Por favor verifica la conexión e intenta actualizar manualmente.');
+        }, 1000);
+      }
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  /* ------------------ NUEVO POPUP MEJORADO Y RESPONSIVE ------------------ */
+  function createPopupContent(properties) {
+    const width = window.innerWidth;
+    
+    let iniciativa = properties.INICIATIVA || 'Proyecto sin título';
+    if (width <= 320 && iniciativa.length > 60) {
+      iniciativa = truncateText(iniciativa, 60);
+    } else if (width <= 480 && iniciativa.length > 80) {
+      iniciativa = truncateText(iniciativa, 80);
+    } else if (width <= 768 && iniciativa.length > 100) {
+      iniciativa = truncateText(iniciativa, 100);
+    }
+    
+    let tematica = properties.TEMATICA || 'Sin temática especificada';
+    if (width <= 480 && tematica.length > 40) {
+      tematica = truncateText(tematica, 40);
+    }
+    
+    const año = properties['AÑO'] || 'N/A';
+    const financiamiento = properties.FINANCIAMI || 'No especificado';
+    const monto = properties.MONTO ? formatCurrency(properties.MONTO) : 'No especificado';
+    const estado = properties.ESTADO || 'Sin estado';
+    const estadoClass = getEstadoClass(estado);
+    const tematicaIcon = getTematicaIcon(tematica);
+    const proyectoId = properties.ID || 'N/A';
+
+    return `
+      <div class="popup-container">
+        <div class="popup-header">
+          <span class="popup-title">${escapeHtml(iniciativa)}</span>
+          <div class="popup-subtitle">
+            <span class="popup-badge" title="${escapeHtml(properties.TEMATICA || '')}">
+              ${tematicaIcon} ${escapeHtml(tematica)}
+            </span>
+            <span class="popup-year">${escapeHtml(año)}</span>
+          </div>
+        </div>
+        
+        <div class="popup-content">
+          <div class="info-grid">
+            <div class="info-item">
+              <div class="info-label">
+                <i>💰</i> Financiamiento
+              </div>
+              <div class="info-value" title="${escapeHtml(financiamiento)}">
+                ${autolinker.link(escapeHtml(financiamiento))}
+              </div>
+            </div>
+            
+            <div class="info-item">
+              <div class="info-label">
+                <i>💵</i> Monto Invertido
+              </div>
+              <div class="info-value highlight" title="${escapeHtml(monto)}">
+                ${autolinker.link(monto)}
+              </div>
+            </div>
+            
+            <div class="info-item">
+              <div class="info-label">
+                <i>📊</i> Estado del Proyecto
+              </div>
+              <div class="info-value">
+                <span class="estado-badge ${estadoClass}" title="${escapeHtml(estado)}">
+                  ${escapeHtml(estado)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="popup-footer">
+          <span class="popup-id">ID: #${proyectoId}</span>
+          <a href="#" class="popup-action" onclick="event.stopPropagation(); alert('Funcionalidad de más información en desarrollo'); return false;">
+            Más información →
+          </a>
+        </div>
+      </div>
+    `;
+  }
+
+  function removeEmptyRowsFromPopupContent(content) {
+    var tmp = document.createElement('div'); tmp.innerHTML = content;
+    var rows = tmp.querySelectorAll('tr');
+    for (var i = rows.length - 1; i >= 0; i--) {
+      var td = rows[i].querySelector('td');
+      if (!td || String(td.textContent).trim() === '') rows[i].parentNode.removeChild(rows[i]);
+    }
+    return tmp.innerHTML;
+  }
+
+  function addClassToPopupIfMedia(content, popup) {
+    if (!popup || !popup._contentNode) return;
+    var tmp = document.createElement('div'); tmp.innerHTML = content;
+    if (tmp.querySelector('td img')) { popup._contentNode.classList.add('media'); setTimeout(()=>popup.update(),10); }
+    else popup._contentNode.classList.remove('media');
+  }
+
+  /* ------------------ LAYERS, LEGEND, CHART ------------------ */
+
+  function processGeoJsonData(data) {
+    const tematicasCount = {};
+    function onEachFeature(feature, layer) {
+      if (!feature.properties) return;
+      var popup = createPopupContent(feature.properties);
+      popup = removeEmptyRowsFromPopupContent(popup);
+      layer.on('popupopen', e => addClassToPopupIfMedia(popup, e.popup));
+      
+      const popupSize = getPopupSize();
+      
+      layer.bindPopup(popup, { 
+        maxHeight: window.innerWidth <= 480 ? 400 : 450,
+        className: popupSize.className,
+        minWidth: popupSize.minWidth,
+        maxWidth: popupSize.maxWidth,
+        autoPanPadding: [20, 20],
+        autoPanPaddingTopLeft: window.innerWidth <= 480 ? [100, 20] : [50, 50],
+        autoPanPaddingBottomRight: window.innerWidth <= 480 ? [100, 20] : [50, 50]
+      });
+    }
+
+    map.createPane('pane_proyectos'); map.getPane('pane_proyectos').style.zIndex = 410;
+
+    const layerAll = L.geoJson(data, {
+      pane: 'pane_proyectos',
+      onEachFeature: onEachFeature,
+      pointToLayer: function(feature, latlng) {
+        return L.circleMarker(latlng, { 
+          radius: 5, 
+          color: '#fff', 
+          weight: 1, 
+          fillColor: '#2AF527', 
+          fillOpacity: 0.9 
+        });
+      }
+    });
+
+    const years = ['2021','2022','2023','2024','2025'];
+    const yearChildren = years.map(y => {
+      const st = YEAR_STYLE_MAP[y] || { color:'#888', shape:'circle', radius:6, name:`Proyectos ${y}` };
+      const layer = L.geoJson(data, {
+        filter: feature => String(feature.properties['AÑO']) === y,
+        pane: 'pane_proyectos',
+        onEachFeature: onEachFeature,
+        pointToLayer: (f, latlng) => createShapeMarker(latlng, { 
+          shape: st.shape, 
+          radius: st.radius, 
+          fillColor: st.color, 
+          fillOpacity: 1, 
+          color: '#232323', 
+          weight: 1 
+        })
+      });
+      return { label: `${makeShapeSVG(st.shape, st.color)} ${st.name}`, layer: layer };
+    });
+
+    const tematicaChildren = Object.keys(TEMATICA_STYLE_MAP_NORM).map(normKey => {
+      const entry = TEMATICA_STYLE_MAP_NORM[normKey];
+      const style = entry.style;
+      const displayName = entry.displayName;
+      const fallbackSVG = makeShapeSVG('circle','#97C47A');
+
+      const layer = L.geoJson(data, {
+        filter: f => f.properties && f.properties.TEMATICA_KEY === normKey,
+        pane: 'pane_proyectos',
+        onEachFeature: onEachFeature,
+        pointToLayer: (f, latlng) => createThematicMarker(latlng, style.iconUrl, fallbackSVG)
+      });
+
+      return { label: displayName, layer: layer, iconUrl: style.iconUrl, fallbackSVG: fallbackSVG };
+    });
+
+    data.features.filter(f => f.properties && f.properties.TEMATICA_KEY).forEach(f => {
+      const k = f.properties.TEMATICA_KEY;
+      const display = (TEMATICA_STYLE_MAP_NORM[k] && TEMATICA_STYLE_MAP_NORM[k].displayName) ? TEMATICA_STYLE_MAP_NORM[k].displayName : (f.properties.TEMATICA || k);
+      tematicasCount[display] = (tematicasCount[display] || 0) + 1;
+    });
+
+    generateBarChartHorizontal(Object.keys(tematicasCount).map(k => ({ tematica: k, cantidad: tematicasCount[k] })));
+
+    const allProjectsItem = { 
+      label: 'Todos los proyectos', 
+      layer: layerAll, 
+      defaultChecked: true,
+      fallbackSVG: createAllProjectsSVG()
+    };
+
+    const overlaysTree = [
+      allProjectsItem,
+      { label: '<b>Proyectos por año</b>', children: yearChildren, startExpanded: false },
+      { label: '<b>Proyectos por temática</b>', children: tematicaChildren, startExpanded: false }
+    ];
+
+    const baseLayers = [
+      { label: 'OpenStreetMap', layer: layer_OpenStreetMap_0 },
+      { label: 'Google Satélite', layer: layer_GoogleSatelite_1 }
+    ];
+
+    if (window._legendTreeControl) {
+      try { map.removeControl(window._legendTreeControl); } catch(e) {}
+      window._legendTreeControl = null;
+    }
+
+    window._legendTreeControl = createLegendTreeControl(baseLayers, overlaysTree);
+    window._legendTreeControl.addTo(map);
+
+    try { if (!map.hasLayer(layerAll)) map.addLayer(layerAll); } catch(e) {}
+    
+    // Almacenar capas para futura limpieza
+    const allLayers = [
+      layerAll, 
+      ...yearChildren.map(c => c.layer),
+      ...tematicaChildren.map(c => c.layer)
+    ];
+    
+    currentLayers.push(...allLayers);
+  }
+
+  function createLegendTreeControl(baseLayers, overlaysTree) {
+    const control = L.Control.extend({
+      options: { position: 'topright' },
+      onAdd: function() {
+        const container = L.DomUtil.create('div','leaflet-control-legend-tree');
+        container.innerHTML = `<div class="legend-tree-header"><div class="legend-tree-title">Simbología & capas</div></div>`;
+        L.DomEvent.disableClickPropagation(container);
+        L.DomEvent.disableScrollPropagation(container);
+
+        const baseSection = L.DomUtil.create('div','lt-section',container);
+        baseSection.innerHTML = `<strong>Capas base</strong>`;
+        baseLayers.forEach((b, i) => {
+          const id = 'base-' + i;
+          const row = document.createElement('label'); row.className = 'lt-item';
+          row.innerHTML = `<input type="radio" name="bases" class="lt-checkbox" id="${id}" ${i===0 ? 'checked' : ''}/><span style="font-size:13px">${stripHtml(b.label)}</span>`;
+          baseSection.appendChild(row);
+          const radio = row.querySelector('input');
+          radio.addEventListener('change', () => {
+            baseLayers.forEach(item => map.removeLayer(item.layer));
+            map.addLayer(b.layer);
+          });
+          if (i===0) map.addLayer(b.layer);
+        });
+
+        const overlaysSection = L.DomUtil.create('div','lt-section',container);
+        overlaysSection.innerHTML = `<strong>Capas</strong>`;
+
+        function createNodeUI(node, parentDom) {
+          const labelText = node.label || '';
+          if (node.layer && !node.children) {
+            const row = document.createElement('div'); row.className = 'lt-item';
+            const checkbox = document.createElement('input'); checkbox.type='checkbox'; checkbox.className='lt-checkbox';
+            if (node.defaultChecked) checkbox.checked = true;
+            row.appendChild(checkbox);
+
+            const iconSpan = document.createElement('span');
+            if (node.iconUrl || node.fallbackSVG) {
+              const fallback = node.fallbackSVG || createAllProjectsSVG();
+              const iconEl = createLegendIconElement(node.iconUrl, fallback);
+              iconSpan.appendChild(iconEl);
+            } else {
+              if (node.fallbackSVG) {
+                iconSpan.innerHTML = node.fallbackSVG;
+              } else {
+                const temp = document.createElement('div'); temp.innerHTML = labelText;
+                const svgEl = temp.querySelector('svg');
+                if (svgEl) iconSpan.innerHTML = svgEl.outerHTML;
+                else iconSpan.innerHTML = `<span class="lt-swatch" style="background:#ddd"></span>`;
+              }
+            }
+            row.appendChild(iconSpan);
+
+            const lbl = document.createElement('span'); lbl.style.flex='1'; lbl.style.fontSize='13px'; lbl.innerHTML = stripHtml(labelText);
+            row.appendChild(lbl);
+            parentDom.appendChild(row);
+
+            if (node.defaultChecked) { try { map.addLayer(node.layer); } catch(e) {} }
+
+            checkbox.addEventListener('change', function () {
+              if (this.checked) map.addLayer(node.layer);
+              else map.removeLayer(node.layer);
+            });
+          } else {
+            const groupDiv = document.createElement('div'); groupDiv.className = 'lt-group';
+            const header = document.createElement('div'); header.className = 'lt-item';
+            const toggleBtn = document.createElement('button'); toggleBtn.className = 'lt-group-toggle'; toggleBtn.innerHTML = '▸';
+            header.appendChild(toggleBtn);
+            const title = document.createElement('span'); title.style.fontWeight='600'; title.style.fontSize='13px'; title.innerHTML = stripHtml(labelText);
+            header.appendChild(title);
+            groupDiv.appendChild(header);
+
+            const childrenWrap = document.createElement('div'); childrenWrap.className = 'lt-children';
+            groupDiv.appendChild(childrenWrap);
+            parentDom.appendChild(groupDiv);
+
+            let collapsed = !(node.startExpanded === true);
+            childrenWrap.style.display = collapsed ? 'none' : '';
+            toggleBtn.innerHTML = collapsed ? '▸' : '▾';
+
+            toggleBtn.addEventListener('click', function () {
+              collapsed = !collapsed;
+              if (!collapsed) {
+                const siblingGroups = parentDom.querySelectorAll('.lt-group');
+                siblingGroups.forEach(gd => {
+                  const ch = gd.querySelector('.lt-children');
+                  const tb = gd.querySelector('.lt-group-toggle');
+                  if (gd === groupDiv) return;
+                  if (ch && ch.style.display !== 'none') { ch.style.display = 'none'; if (tb) tb.innerHTML = '▸'; }
+                });
+                childrenWrap.style.display = ''; toggleBtn.innerHTML = '▾';
+              } else {
+                childrenWrap.style.display = 'none'; toggleBtn.innerHTML = '▸';
+              }
+            });
+
+            if (Array.isArray(node.children)) node.children.forEach(child => createNodeUI(child, childrenWrap));
+          }
+        }
+
+        overlaysTree.forEach(n => createNodeUI(n, overlaysSection));
+        return container;
+      }
+    });
+    return new control();
+  }
+
+  window._lastChartData = null; window._chartResizeAttached = false;
+  function generateBarChartHorizontal(data){
+    window._lastChartData = data ? JSON.parse(JSON.stringify(data)) : null;
+    const container = d3.select("#barChartContainer"); container.selectAll("*").remove();
+    if(!data || data.length===0){ container.append("div").text("No hay datos por temática").style("font-size","13px").style("color","#666"); return; }
+    data = data.slice().sort((a,b)=>b.cantidad-a.cantidad);
+
+    const containerWidth = Math.max(300, container.node().getBoundingClientRect().width);
+    let leftMargin = 170;
+    let barHeight = 28;
+    let labelFontSize = 13;
+    let valueThresholdPx = 40;
+
+    if (containerWidth <= 360) {
+      leftMargin = 110;
+      barHeight = 18;
+      labelFontSize = 11;
+      valueThresholdPx = 28;
+    } else if (containerWidth <= 480) {
+      leftMargin = 140;
+      barHeight = 22;
+      labelFontSize = 12;
+      valueThresholdPx = 34;
+    }
+
+    const margin = { top: 12, right: 12, bottom: 24, left: leftMargin };
+    const fullWidth = containerWidth;
+    const innerHeight = Math.max(120, data.length * (barHeight + 6));
+    const height = innerHeight + margin.top + margin.bottom;
+    const width = fullWidth;
+
+    const svg = container.append("svg")
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .attr("preserveAspectRatio","xMidYMid meet")
+      .style("width","100%")
+      .style("height", height + "px");
+
+    const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+    const xMax = d3.max(data, d => +d.cantidad) || 1;
+    const x = d3.scaleLinear().domain([0, xMax * 1.15]).range([0, width - margin.left - margin.right]);
+    const y = d3.scaleBand().domain(data.map(d => d.tematica)).range([0, innerHeight]).padding(0.12);
+
+    const xAxis = g.append("g").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x).ticks(4).tickFormat(d3.format("~s")));
+    xAxis.selectAll("text").style("font-size", Math.max(9, labelFontSize - 2) + "px").attr("fill","#495d66");
+
+    const defs = svg.append("defs");
+    const grad = defs.append("linearGradient").attr("id","hBarGrad").attr("x1","0%").attr("x2","100%").attr("y1","0%").attr("y2","0%");
+    grad.append("stop").attr("offset","0%").attr("stop-color","#66b3ff");
+    grad.append("stop").attr("offset","100%").attr("stop-color","#2b79d6");
+
+    let tooltip = d3.select("body").selectAll(".bar-tooltip").data([0]);
+    tooltip = tooltip.enter().append("div").attr("class","bar-tooltip").merge(tooltip);
+
+    const groups = g.selectAll(".bar-group").data(data, d => d.tematica);
+    const groupsEnter = groups.enter().append("g").attr("class","bar-group").attr("transform", d => `translate(0,${y(d.tematica)})`);
+
+    groupsEnter.append("rect")
+      .attr("class","hbar")
+      .attr("x", 0)
+      .attr("y", 0)
+      .attr("height", y.bandwidth())
+      .attr("width", 0)
+      .attr("fill","url(#hBarGrad)")
+      .attr("rx", 6)
+      .on("mouseenter", function(event,d){ d3.select(this).attr("opacity",0.85); tooltip.style("opacity",1).html(`<strong>${escapeHtml(d.tematica)}</strong><div style="font-weight:700;margin-top:4px">${d.cantidad}</div>`); })
+      .on("mousemove", function(event){ tooltip.style("left",(event.pageX)+"px").style("top",(event.pageY - 12)+"px"); })
+      .on("mouseleave", function(){ d3.select(this).attr("opacity",1); tooltip.style("opacity",0); });
+
+    groupsEnter.append("text")
+      .attr("class","bar-value")
+      .attr("x", 6)
+      .attr("y", y.bandwidth()/2 + (labelFontSize/3))
+      .style("font-size", labelFontSize + "px")
+      .style("font-weight","700")
+      .text(d => d.cantidad)
+      .style("opacity",0);
+
+    const labels = svg.append("g").attr("transform", `translate(${margin.left - 8},${margin.top})`);
+    labels.selectAll("text")
+      .data(data)
+      .enter()
+      .append("text")
+      .attr("x", 0)
+      .attr("y", d => y(d.tematica) + y.bandwidth()/2 + (labelFontSize/3))
+      .attr("text-anchor","end")
+      .style("font-size", labelFontSize + "px")
+      .style("fill","#203445")
+      .each(function(d) {
+        const maxChars = (containerWidth <= 360) ? 18 : 30;
+        const words = d.tematica.split(/\s+/);
+        const lines = [];
+        let cur = '';
+        words.forEach(w => {
+          if ((cur + ' ' + w).trim().length <= maxChars) cur = (cur + ' ' + w).trim();
+          else { lines.push(cur); cur = w; }
+        });
+        if (cur) lines.push(cur);
+        if (lines.length > 2) {
+          const first = lines[0];
+          const rest = lines.slice(1).join(' ');
+          lines.length = 0; lines.push(first); lines.push(rest);
+        }
+        const totalLines = lines.length;
+        const startY = y(d.tematica) + (y.bandwidth()/2) - ((totalLines - 1) * 7);
+        d3.select(this).attr("y", startY);
+        lines.forEach((ln, i) => {
+          d3.select(this).append("tspan")
+            .attr("x", 0)
+            .attr("dy", i === 0 ? '0em' : '1.1em')
+            .text(ln);
+        });
+      });
+
+    groupsEnter.selectAll(".hbar").transition().duration(700).attr("width", d => x(d.cantidad));
+
+    groupsEnter.selectAll(".bar-value")
+      .transition().duration(700).delay(120)
+      .style("opacity",1)
+      .attr("x", function(d) {
+        const w = x(d.cantidad);
+        if (w < valueThresholdPx) {
+          d._valueInside = false;
+          return w + 8;
+        } else {
+          d._valueInside = true;
+          return Math.max(w - 8, 6);
+        }
+      })
+      .attr("text-anchor", d => d._valueInside ? "end" : "start")
+      .style("fill", d => d._valueInside ? "#ffffff" : "#203445");
+
+    if (!window._chartResizeAttached) {
+      window._chartResizeAttached = true;
+      let rt;
+      window.addEventListener('resize', ()=>{ 
+        clearTimeout(rt); 
+        rt = setTimeout(()=>{ 
+          if(window._lastChartData) generateBarChartHorizontal(window._lastChartData); 
+          map.invalidateSize(); 
+          
+          map.eachLayer(function(layer) {
+            if (layer.getPopup && layer.getPopup()) {
+              const popup = layer.getPopup();
+              if (popup && popup.isOpen()) {
+                const latlng = layer.getLatLng ? layer.getLatLng() : null;
+                if (latlng) {
+                  popup.close();
+                  setTimeout(() => layer.openPopup(), 50);
+                }
+              }
+            }
+          });
+        }, 180); 
+      });
+      
+      window.addEventListener('orientationchange', ()=> setTimeout(()=>{ 
+        if(window._lastChartData) generateBarChartHorizontal(window._lastChartData); 
+        map.invalidateSize(); 
+      }, 300));
+    }
+    window._lastChartData = data;
+  }
+
+  /* ------------------ INICIALIZACIÓN ------------------ */
+  document.addEventListener('DOMContentLoaded', function () {
+    // Configurar botón de cerrar texto
+    const cerrarTextoBtn = document.getElementById('cerrarTexto');
+    const textoPanel = document.getElementById('texto');
+    if (cerrarTextoBtn && textoPanel) {
+      cerrarTextoBtn.addEventListener('click', () => {
+        textoPanel.classList.add('hidden'); 
+        setTimeout(()=> textoPanel.style.display='none', 300);
+      });
+    }
+    
+    // Configurar botón de actualización manual
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => {
+        console.log('Actualización manual solicitada');
+        loadDataFromCSV();
+      });
+    }
+    
+    // Cargar datos iniciales
+    console.log('Iniciando carga inicial de datos...');
+    loadDataFromCSV();
+    
+    // Iniciar recarga automática cada 10 minutos
+    startAutoReload(10);
+    
+    // Recargar cuando la pestaña gana foco
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && lastDataUpdate) {
+        // Solo recargar si han pasado más de 5 minutos desde la última actualización
+        const now = new Date();
+        const minutesSinceLastUpdate = (now - lastDataUpdate) / (1000 * 60);
+        
+        if (minutesSinceLastUpdate > 5) {
+          console.log('Pestaña activada, recargando datos...');
+          loadDataFromCSV();
+        }
+      }
+    });
+    
+    // También recargar cada vez que la ventana gana foco (para algunos navegadores)
+    window.addEventListener('focus', () => {
+      if (lastDataUpdate) {
+        const now = new Date();
+        const minutesSinceLastUpdate = (now - lastDataUpdate) / (1000 * 60);
+        
+        if (minutesSinceLastUpdate > 10) {
+          console.log('Ventana enfocada, recargando datos...');
+          loadDataFromCSV();
+        }
+      }
+    });
+  });
+
+  // Responsive UI (chart toggle)
+  (function attachResponsiveUI(){
+    const toggleChartBtn = document.getElementById('toggleChartBtn');
+    const chartPanel = document.getElementById('chartPanel');
+    let chartVisible = true;
+    
+    if (toggleChartBtn && chartPanel) {
+      toggleChartBtn.addEventListener('click', () => {
+        chartVisible = !chartVisible;
+        chartPanel.style.display = chartVisible ? '' : 'none';
+        toggleChartBtn.setAttribute('aria-pressed', String(chartVisible));
+      });
+      
+      function adaptInitialVisibility() {
+        if (window.innerWidth <= 600) {
+          chartPanel.style.display = 'none';
+          chartVisible = false;
+          toggleChartBtn.setAttribute('aria-pressed','false');
+        } else {
+          chartPanel.style.display = '';
+          chartVisible = true;
+          toggleChartBtn.setAttribute('aria-pressed','true');
+        }
+      }
+      
+      adaptInitialVisibility();
+      window.addEventListener('resize', adaptInitialVisibility);
+    }
+  })();
+  </script>
+</body>
+</html>

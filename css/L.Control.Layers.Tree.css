@@ -1,0 +1,65 @@
+/* Panel general */
+.leaflet-control-layers {
+    background-color: #f9f9f9;
+    border-radius: 6px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    padding: 8px 10px;
+    font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+    font-size: 12px;
+    color: #333;
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+/* Etiquetas y toggles */
+.leaflet-control-layers label {
+    display: flex;
+    align-items: center;
+    margin-bottom: 4px;
+    cursor: pointer;
+}
+
+.leaflet-control-layers input[type="checkbox"],
+.leaflet-control-layers input[type="radio"] {
+    margin-right: 6px;
+    transform: scale(0.9);
+}
+
+/* Separadores entre grupos */
+.leaflet-control-layers-separator {
+    border-top: 1px solid #ddd;
+    margin: 6px 0;
+}
+
+/* Estilo del árbol de capas */
+.leaflet-layerstree-header {
+    font-weight: 600;
+    padding: 4px 0;
+    color: #0078D7;
+}
+
+.leaflet-layerstree-children {
+    padding-left: 12px;
+}
+
+.leaflet-layerstree-expand-collapse {
+    cursor: pointer;
+    font-size: 14px;
+    color: #555;
+}
+
+.leaflet-layerstree-header label {
+    cursor: pointer;
+    font-weight: normal;
+    color: #444;
+}
+
+.leaflet-layerstree-header-name {
+    padding-left: 4px;
+}
+
+/* Ocultar nodos si es necesario */
+.leaflet-layerstree-hide,
+.leaflet-layerstree-nevershow {
+    display: none;
+}
