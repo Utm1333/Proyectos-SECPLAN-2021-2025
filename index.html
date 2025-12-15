@@ -1138,7 +1138,7 @@
           type:'Feature',
           properties: {
             INICIATIVA: row['INICIATIVA'] || '',
-            FINANCIAMI: row['FINANCIAMI'] || '',
+            FINANCIAMI: row['FINANCIAMIENTO'] || row['FINANCIAMI'] || '',
             MONTO: row['MONTO'] || '',
             ESTADO: row['ESTADO'] ? String(row['ESTADO']).toUpperCase() : '',
             TEMATICA: rawTem,
